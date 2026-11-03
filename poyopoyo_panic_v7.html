@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ぽよぽよパニック🔨</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 20px 14px 36px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #fff; text-align: center;
+    background: radial-gradient(circle at top, #39305b 0, #17152b 58%, #10101d 100%);
+  }
+  .wrap { width: min(760px, 100%); margin: 0 auto; }
+  h1 { margin: 8px 0 6px; font-size: clamp(26px, 6vw, 38px); }
+  .subtitle { margin: 0 0 18px; color: #d7d1f2; }
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px;
+    margin: 16px 0;
+  }
+  .stat {
+    background: #292542; border: 1px solid #514a75; border-radius: 15px;
+    padding: 11px 5px;
+  }
+  .stat-label { display: block; color: #c9c3e4; font-size: 12px; }
+  .stat-value { display: block; margin-top: 3px; font-size: clamp(22px, 5vw, 30px); font-weight: 800; }
+  #timer.urgent { color: #ff9caa; }
+  .board {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    padding: 12px; border-radius: 20px;
+    background: #201d37; border: 1px solid #514a75;
+  }
+  .hole {
+    position: relative; aspect-ratio: 1 / 1; min-width: 0;
+    display: grid; place-items: center; overflow: hidden;
+    border: 2px solid #655b8c; border-radius: 18px;
+    background: linear-gradient(#44395f, #2b2545);
+    box-shadow: inset 0 -8px 0 rgba(0,0,0,.18);
+    cursor: pointer; touch-action: none; user-select: none;
+    -webkit-user-select: none; -webkit-touch-callout: none;
+    padding: 5px;
+  }
+  .hole:active { transform: scale(.97); }
+  .hole img { width: 88%; height: 88%; object-fit: contain; pointer-events: none; }
+  .hole.empty::after {
+    content: ""; width: 45%; height: 22%; position: absolute; bottom: 13%;
+    border-radius: 50%; background: rgba(12,10,23,.35); filter: blur(3px);
+  }
+  .hole.has-character { background: linear-gradient(#65517d, #403353); }
+  .hole.hit { opacity: .55; }
+  .name-entry {
+    display: grid; grid-template-columns: minmax(120px, 42%) 1fr;
+    gap: 10px; align-items: center; margin: 18px 0 10px;
+    text-align: left;
+  }
+  .name-label {
+    font-weight: 800; line-height: 1.4; font-size: 14px;
+  }
+  .name-input {
+    width: 100%; min-width: 0; padding: 13px 12px;
+    border: 1px solid #8174ad; border-radius: 10px;
+    background: #292542; color: #fff; font-size: 16px;
+  }
+  .name-input::placeholder { color: #aaa5bd; }
+  .name-input:focus { outline: 2px solid #f5c96b; outline-offset: 2px; }
+  .controls { margin: 12px 0 8px; }
+  button {
+    border: 0; border-radius: 999px; padding: 13px 28px;
+    background: #f5c96b; color: #2b2034; font-weight: 800; font-size: 17px;
+    cursor: pointer; touch-action: manipulation;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .message {
+    min-height: 28px; margin: 12px 0; color: #f5d98d; font-weight: 700;
+  }
+  .rules {
+    margin: 18px auto 0; padding: 14px 16px; text-align: left;
+    background: rgba(41,37,66,.8); border: 1px solid #514a75; border-radius: 15px;
+    color: #e3def5; line-height: 1.7; font-size: 14px;
+  }
+  .rules strong { color: #fff; }
+  .read-rules { margin: 16px 0 4px; }
+  .secondary-button {
+    background: #8174ad; color: #fff; font-size: 15px;
+    padding: 11px 22px;
+  }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    display: grid; place-items: center; padding: 18px;
+    background: rgba(5, 4, 15, .78);
+  }
+  .modal-backdrop[hidden] { display: none; }
+  .modal-panel {
+    width: min(520px, 100%); max-height: 85vh; overflow-y: auto;
+    margin: 0; text-align: left; box-shadow: 0 18px 60px rgba(0,0,0,.4);
+  }
+  .modal-panel h2 { margin: 0 0 12px; text-align: center; }
+  .modal-actions { margin-top: 18px; text-align: center; }
+  .result {
+    display: none; margin: 16px 0; padding: 18px;
+    background: #292542; border: 1px solid #8174ad; border-radius: 18px;
+  }
+  .result h2 { margin: 0 0 10px; }
+  .final-score { font-size: 38px; font-weight: 900; color: #f5d98d; }
+  .bonus { color: #b8f0c7; font-weight: 700; }
+  @media (max-width: 420px) {
+    body { padding-left: 9px; padding-right: 9px; }
+    .board { gap: 7px; padding: 8px; }
+    .hole { border-radius: 13px; }
+    .name-entry { grid-template-columns: 42% 1fr; gap: 7px; }
+    .name-label { font-size: 13px; }
+    .name-input { padding: 12px 9px; }
+  }
+
+  .ranking{margin:22px 0 0;padding:16px;background:rgba(41,37,66,.9);border:1px solid #514a75;border-radius:18px;text-align:left}
+  .ranking h2{margin:0 0 12px;text-align:center}
+  .ranking-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+  .ranking-tab{padding:10px 5px;border-radius:10px;background:#514a75;color:#fff;font-size:13px;line-height:1.35}
+  .ranking-tab[aria-selected="true"]{background:#f5c96b;color:#2b2034}
+  .ranking-status{min-height:22px;margin:8px 0;color:#d7d1f2;font-size:13px;text-align:center}
+  .ranking-list{margin:0;padding:0;list-style:none}
+  .ranking-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 8px;border-bottom:1px solid #514a75;font-size:14px}
+  .ranking-item:last-child{border-bottom:0}
+  .ranking-rank{color:#f5d98d;font-weight:900;text-align:center}
+  .ranking-name{overflow-wrap:anywhere;font-weight:700}
+  .ranking-score{text-align:right;white-space:nowrap}
+  @media(max-width:420px){.ranking{padding:12px 9px}.ranking-tab{font-size:11px}.ranking-item{font-size:13px}}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ぽよぽよパニック🔨</h1>
+  <p class="subtitle">30秒チャレンジ！通常キャラをタップしよう</p>
+
+  <div class="stats">
+    <div class="stat"><span class="stat-label">のこり時間</span><span class="stat-value" id="timer">30</span></div>
+    <div class="stat"><span class="stat-label">スコア</span><span class="stat-value" id="score">0</span></div>
+    <div class="stat"><span class="stat-label">コンボ</span><span class="stat-value" id="combo">0</span></div>
+  </div>
+
+  <div class="board" id="board" aria-label="ゲームエリア"></div>
+
+  <div class="name-entry">
+    <label class="name-label" for="playerName">ぽよに呼ばれている名前</label>
+    <input
+      class="name-input"
+      id="playerName"
+      type="text"
+      maxlength="20"
+      autocomplete="nickname"
+      placeholder="同じ名前を入力"
+    >
+  </div>
+
+  <div class="controls">
+    <button id="startButton" type="button" disabled>名前を入力してね</button>
+  </div>
+  <div class="message" id="message">スタートを押してね！</div>
+
+  <section class="result" id="result">
+    <h2>ゲーム終了！</h2>
+    <div class="final-score" id="finalScore">0点</div>
+    <p id="bestCombo">最大コンボ：0</p>
+    <p class="bonus" id="perfectMessage"></p>
+    <button id="retryButton" type="button">もう一度遊ぶ</button>
+  </section>
+
+
+  <section class="ranking" id="rankingSection" aria-label="ランキング">
+    <h2>ランキング</h2>
+    <div class="ranking-tabs" role="tablist" aria-label="ランキングの種類">
+      <button class="ranking-tab" type="button" data-ranking="monthlyScore" role="tab" aria-selected="true">点数ランキング<br>（月間）</button>
+      <button class="ranking-tab" type="button" data-ranking="monthlyCombo" role="tab" aria-selected="false">コンボ数ランキング<br>（月間）</button>
+      <button class="ranking-tab" type="button" data-ranking="allTime" role="tab" aria-selected="false">歴代ランキング<br>（全期間）</button>
+    </div>
+    <p class="ranking-status" id="rankingStatus" aria-live="polite">ランキングを読み込み中…</p>
+    <ol class="ranking-list" id="rankingList"></ol>
+  </section>
+
+  <div class="read-rules">
+    <button id="rulesButton" type="button" class="secondary-button">始める前に読んでね</button>
+  </div>
+
+  <div class="modal-backdrop" id="rulesModal" role="dialog" aria-modal="true" aria-labelledby="rulesTitle" hidden>
+    <section class="rules modal-panel">
+      <h2 id="rulesTitle">始める前に読んでね</h2>
+      <strong>ルール</strong><br>
+      ・通常キャラクター：+10点<br>
+      ・ぽよのちびキャラ：−10点<br>
+      ・3〜9コンボ：追加+10点<br>
+      ・10コンボ以上：追加+20点（20コンボ以降も同じ）<br>
+      ・ぽよを叩く、または空振りするとコンボ終了<br>
+      ・30秒間、ぽよを叩かず空振りもせずに通常キャラを1回以上叩けたら、パーフェクト+30点！
+      <div class="modal-actions">
+        <button id="closeRulesButton" type="button">閉じる</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const normalPictures = Array.from({ length: 24 }, (_, i) => `card${i + 1}.new.PNG`);
+  const poyoPicture = "card0.new.PNG";
+  const board = document.getElementById("board");
+  const timerEl = document.getElementById("timer");
+  const scoreEl = document.getElementById("score");
+  const comboEl = document.getElementById("combo");
+  const messageEl = document.getElementById("message");
+  const startButton = document.getElementById("startButton");
+  const resultEl = document.getElementById("result");
+  const finalScoreEl = document.getElementById("finalScore");
+  const bestComboEl = document.getElementById("bestCombo");
+  const perfectMessageEl = document.getElementById("perfectMessage");
+  const retryButton = document.getElementById("retryButton");
+  const playerNameInput = document.getElementById("playerName");
+  const rulesButton = document.getElementById("rulesButton");
+  const rulesModal = document.getElementById("rulesModal");
+  const closeRulesButton = document.getElementById("closeRulesButton");
+
+  const rankingStatusEl = document.getElementById("rankingStatus");
+  const rankingListEl = document.getElementById("rankingList");
+  const rankingTabButtons = Array.from(document.querySelectorAll(".ranking-tab"));
+  const SUPABASE_URL = "https://whhkacmvdsncciclsnmw.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_RX65B6PCsKcitE70f4UyNg_FB8niWGZ";
+  const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
+  let allRankingRecords = [];
+  let activeRanking = "monthlyScore";
+
+
+
+  function bestRecordPerPlayer(records, primaryKey, secondaryKey) {
+    const best = new Map();
+    for (const record of records) {
+      const name = String(record.player_name || "").trim();
+      if (!name) continue;
+      const old = best.get(name);
+      if (!old || Number(record[primaryKey]) > Number(old[primaryKey]) ||
+          (Number(record[primaryKey]) === Number(old[primaryKey]) &&
+           Number(record[secondaryKey]) > Number(old[secondaryKey]))) best.set(name, record);
+    }
+    return Array.from(best.values()).sort((a,b) =>
+      Number(b[primaryKey])-Number(a[primaryKey]) ||
+      Number(b[secondaryKey])-Number(a[secondaryKey]) ||
+      String(a.player_name).localeCompare(String(b.player_name),"ja")
+    ).slice(0,10);
+  }
+
+  function renderRanking() {
+    rankingTabButtons.forEach(button =>
+      button.setAttribute("aria-selected", String(button.dataset.ranking === activeRanking)));
+    let records = allRankingRecords;
+    let primary = "score", secondary = "max_combo";
+    if (activeRanking !== "allTime") {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      records = records.filter(record => {
+        const date = new Date(record.created_at);
+        return !Number.isNaN(date.getTime()) && date >= monthStart;
+      });
+    }
+    if (activeRanking === "monthlyCombo") {
+      primary = "max_combo";
+      secondary = "score";
+    }
+    const ranking = bestRecordPerPlayer(records, primary, secondary);
+    rankingListEl.replaceChildren();
+    if (!ranking.length) {
+      rankingStatusEl.textContent = activeRanking === "allTime"
+        ? "まだランキング記録がありません。" : "今月のランキング記録はまだありません。";
+      return;
+    }
+    rankingStatusEl.textContent = activeRanking === "allTime"
+      ? "全期間・各プレイヤーの最高記録（上位10名）"
+      : "今月・各プレイヤーの最高記録（上位10名）";
+    ranking.forEach((record,index) => {
+      const item = document.createElement("li");
+      item.className = "ranking-item";
+      const rank = document.createElement("span");
+      rank.className = "ranking-rank";
+      rank.textContent = `${index+1}位`;
+      const name = document.createElement("span");
+      name.className = "ranking-name";
+      name.textContent = record.player_name;
+      const value = document.createElement("span");
+      value.className = "ranking-score";
+      value.textContent = activeRanking === "monthlyCombo"
+        ? `${Number(record.max_combo)||0}コンボ / ${Number(record.score)||0}点`
+        : `${Number(record.score)||0}点 / ${Number(record.max_combo)||0}コンボ`;
+      item.append(rank,name,value);
+      rankingListEl.appendChild(item);
+    });
+  }
+
+  async function loadRankings() {
+    if (!supabase) {
+      rankingStatusEl.textContent = "ランキング機能を読み込めませんでした。";
+      return;
+    }
+    rankingStatusEl.textContent = "ランキングを読み込み中…";
+    const {data,error} = await supabase.from("poyo_panic_records")
+      .select("player_name, score, max_combo, created_at")
+      .order("created_at",{ascending:false});
+    if (error) {
+      console.error("ランキング読み込みエラー:",error);
+      rankingStatusEl.textContent = "ランキングを読み込めませんでした。時間をおいて再読み込みしてください。";
+      return;
+    }
+    allRankingRecords = data || [];
+    renderRanking();
+  }
+
+  async function saveGameRecord() {
+    if (!supabase) {
+      messageEl.textContent = "記録を保存できませんでした（接続設定を確認してください）。";
+      return;
+    }
+    const {error} = await supabase.from("poyo_panic_records").insert([{
+      player_name: currentPlayerName, score: score, max_combo: maxCombo
+    }]);
+    if (error) {
+      console.error("記録保存エラー:",error);
+      messageEl.textContent = "ランキングへの記録保存に失敗しました。";
+      return;
+    }
+    messageEl.textContent = `${currentPlayerName}さん、おつかれさまでした！記録を保存しました。`;
+    await loadRankings();
+  }
+
+  rankingTabButtons.forEach(button => button.addEventListener("click",() => {
+    activeRanking = button.dataset.ranking;
+    renderRanking();
+  }));
+
+  function openRules() {
+    rulesModal.hidden = false;
+    closeRulesButton.focus();
+  }
+  function closeRules() {
+    rulesModal.hidden = true;
+    rulesButton.focus();
+  }
+  rulesButton.addEventListener("click", openRules);
+  closeRulesButton.addEventListener("click", closeRules);
+  rulesModal.addEventListener("click", (event) => {
+    if (event.target === rulesModal) closeRules();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !rulesModal.hidden) closeRules();
+  });
+
+  const holes = [];
+  for (let i = 0; i < 9; i++) {
+    const hole = document.createElement("button");
+    hole.type = "button";
+    hole.className = "hole empty";
+    hole.setAttribute("aria-label", `場所 ${i + 1}`);
+    // pointerdownは複数指の同時タップを個別に受け取れる
+    hole.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      hitHole(i);
+    });
+    board.appendChild(hole);
+    holes.push({ element: hole, character: null, hit: false });
+  }
+
+  let playing = false;
+  let score = 0;
+  let combo = 0;
+  let maxCombo = 0;
+  let timeLeft = 30;
+  let timerInterval = null;
+  let spawnTimeout = null;
+  let perfectPossible = true;
+  let normalHitCount = 0;
+  let currentPlayerName = "";
+
+  function updateStartButton() {
+    const hasName = playerNameInput.value.trim().length > 0;
+    if (!playing) {
+      startButton.disabled = !hasName;
+      startButton.textContent = hasName ? "ゲームスタート" : "名前を入力してね";
+    }
+  }
+
+  playerNameInput.addEventListener("input", updateStartButton);
+
+  function updateDisplay() {
+    scoreEl.textContent = score;
+    comboEl.textContent = combo;
+    timerEl.textContent = timeLeft;
+    timerEl.classList.toggle("urgent", timeLeft <= 5);
+  }
+
+  function clearHole(index) {
+    const hole = holes[index];
+    hole.character = null;
+    hole.hit = false;
+    hole.element.className = "hole empty";
+    hole.element.replaceChildren();
+  }
+
+  function clearAllHoles() {
+    holes.forEach((_, i) => clearHole(i));
+  }
+
+  function spawnCharacter() {
+    if (!playing) return;
+
+    const available = holes.map((hole, index) => hole.character === null ? index : -1)
+                           .filter(index => index >= 0);
+    if (available.length > 0) {
+      const index = available[Math.floor(Math.random() * available.length)];
+      const isPoyo = Math.random() < 0.16;
+      const filename = isPoyo
+        ? poyoPicture
+        : normalPictures[Math.floor(Math.random() * normalPictures.length)];
+
+      const img = document.createElement("img");
+      img.src = filename;
+      img.alt = isPoyo ? "ぽよ" : "キャラクター";
+      img.draggable = false;
+
+      holes[index].character = isPoyo ? "poyo" : "normal";
+      holes[index].element.className = "hole has-character";
+      holes[index].element.replaceChildren(img);
+
+      const visibleTime = 850 + Math.floor(Math.random() * 250);
+      window.setTimeout(() => {
+        if (holes[index].character !== null) clearHole(index);
+      }, visibleTime);
+    }
+
+    spawnTimeout = window.setTimeout(spawnCharacter, 520 + Math.floor(Math.random() * 260));
+  }
+
+  function hitHole(index) {
+    if (!playing) return;
+    const hole = holes[index];
+
+    // すでに叩いたキャラクターへの連打は、空振り扱いにもせず無視する
+    if (hole.hit) return;
+
+    if (hole.character === null) {
+      perfectPossible = false;
+      combo = 0;
+      messageEl.textContent = "空振り！コンボ終了";
+      updateDisplay();
+      return;
+    }
+
+    const character = hole.character;
+    hole.hit = true;
+    hole.element.classList.add("hit");
+    hole.character = null;
+
+    if (character === "poyo") {
+      score -= 10;
+      combo = 0;
+      perfectPossible = false;
+      messageEl.textContent = "ぽよだった！ −10点";
+    } else {
+      combo += 1;
+      normalHitCount += 1;
+      maxCombo = Math.max(maxCombo, combo);
+      let bonus = 0;
+      if (combo >= 10) bonus = 20;
+      else if (combo >= 3) bonus = 10;
+      score += 10 + bonus;
+      messageEl.textContent = bonus > 0
+        ? `${combo}コンボ！ +${10 + bonus}点`
+        : `ナイス！ +10点`;
+    }
+
+    window.setTimeout(() => clearHole(index), 120);
+    updateDisplay();
+  }
+
+  function endGame() {
+    if (!playing) return;
+    playing = false;
+    window.clearInterval(timerInterval);
+    window.clearTimeout(spawnTimeout);
+    clearAllHoles();
+
+    const perfect = perfectPossible && normalHitCount > 0;
+    if (perfect) score += 30;
+
+    updateDisplay();
+    finalScoreEl.textContent = `${score}点`;
+    bestComboEl.textContent = `最大コンボ：${maxCombo}`;
+    perfectMessageEl.textContent = perfect ? "パーフェクト！ボーナス +30点！" : "次はパーフェクトを目指そう！";
+    resultEl.style.display = "block";
+    startButton.disabled = false;
+    startButton.textContent = "もう一度遊ぶ";
+    messageEl.textContent = `${currentPlayerName}さん、おつかれさまでした！記録を保存中…`;
+    saveGameRecord();
+  }
+
+  function startGame() {
+    const enteredName = playerNameInput.value.trim();
+    if (!enteredName) {
+      messageEl.textContent = "ぽよに呼ばれている名前を入力してね！";
+      playerNameInput.focus();
+      updateStartButton();
+      return;
+    }
+    currentPlayerName = enteredName;
+
+    window.clearInterval(timerInterval);
+    window.clearTimeout(spawnTimeout);
+    clearAllHoles();
+
+    score = 0;
+    combo = 0;
+    maxCombo = 0;
+    timeLeft = 30;
+    perfectPossible = true;
+    normalHitCount = 0;
+    playing = true;
+    resultEl.style.display = "none";
+    startButton.disabled = true;
+    startButton.textContent = "プレイ中…";
+    messageEl.textContent = "通常キャラクターを狙おう！";
+    updateDisplay();
+
+    spawnCharacter();
+    timerInterval = window.setInterval(() => {
+      timeLeft -= 1;
+      updateDisplay();
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+  }
+
+  startButton.addEventListener("click", startGame);
+  retryButton.addEventListener("click", startGame);
+  updateDisplay();
+  updateStartButton();
+  loadRankings();
+})();
+</script>
+</body>
+</html>
